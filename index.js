@@ -1,60 +1,77 @@
-import express from "express";
+import http from "http";
 import dotenv from "dotenv";
-import { dbConnect } from "./src/utils/utils.js";
-import helmet from "helmet";
-import morgan from "morgan";
-import cors from "cors"
-import { errorHandler, notFoundErrorHandler } from "./src/middlewares/errorHandler.js";
-import userRouter from "./src/routes/userRoutes.js";
-import vendorRouter from "./src/routes/vendorRoutes.js";
-import productRouter from "./src/routes/productRoutes.js";
-import brandRouter from "./src/routes/brandRoutes.js";
-import categoryRouter from "./src/routes/categoryRoutes.js";
-import subcategoryRouter from "./src/routes/subCategoryRoutes.js";
-import wishlistRouter from "./src/routes/wishlistRoutes.js";
-import reviewRouter from "./src/routes/reviewRoutes.js";
-import uploadRouter from "./src/routes/uploadRoutes.js";
-import orderRouter from "./src/routes/orderRoutes.js";
-import supportRouter from "./src/routes/supportRoutes.js";
+import express from "express";
+import { Server } from "socket.io";
+import connectDB from "./src/config/db.js";
+import app from "./src/app.js"; // assumes you export express app from src/app.js or adapt accordingly
+import chatRoutes from "./src/routes/chatRoutes.js";
+import aiRoutes from "./src/routes/aiRoutes.js";
+import { Message } from "./src/models/messageModel.js";
+import { Vendor } from "./src/models/vendorModel.js";
+import { socketAuth } from "./src/middlewares/socketAuth.js";
+import vendorListRoutes from "./src/routes/vendorListRoutes.js";
 
-// Load Environment Variables from .env file
 dotenv.config();
 
-//connection to MongoDB
-dbConnect();
+// connect to MongoDB
+await connectDB();
 
-// Initialize Express App
-const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: process.env.FRONTEND_ORIGIN || "*" } });
 
-//Middleware Setup
-app.use(helmet());
-app.use(express.json());
-app.use(morgan("dev"));
-app.use(cors());
+// Apply socket authentication middleware to validate JWT and attach user
+io.use(socketAuth);
 
-// Api Routes
-app.use("/api/user", userRouter);
-app.use("/api/vendor", vendorRouter);
-app.use("/api/product", productRouter);
-app.use("/api/brand", brandRouter);
-app.use("/api/category", categoryRouter);
-app.use("/api/subcategory", subcategoryRouter);
-app.use("/api/wishlist", wishlistRouter);
-app.use("/api/review", reviewRouter);
-app.use("/api/upload", uploadRouter);
-app.use("/api/order", orderRouter);
-app.use("/api/support", supportRouter);
+io.on("connection", (socket) => {
+  console.log("Socket connected:", socket.id);
 
+  // join authenticated user's room
+  const authUserId = socket.data?.user?._id?.toString();
+  if (authUserId) {
+    socket.join(authUserId);
+  }
 
+  socket.on("join", ({ userId }) => {
+    if (userId && authUserId && userId.toString() === authUserId.toString()) {
+      socket.join(userId);
+    } else {
+      // ignored
+    }
+  });
 
+  socket.on("chat:send", async (payload) => {
+    try {
+      const fromId = authUserId;
+      const { toVendor, message } = payload;
+      if (!fromId || !toVendor || !message) {
+        return;
+      }
 
+      const msg = await Message.create({ from: fromId, to: toVendor, text: message, type: "user" });
+      io.to(toVendor).emit("chat:message", { ...msg.toObject(), type: "user" });
 
-// Error Handler Middlewares
-app.use(notFoundErrorHandler);
-app.use(errorHandler);
+      try {
+        const vendor = await Vendor.findById(toVendor);
+        if (vendor?.autoResponseEnabled && vendor.autoResponse) {
+          const auto = await Message.create({ from: toVendor, to: fromId, text: vendor.autoResponse, type: "vendor" });
+          io.to(fromId).emit("chat:message", { ...auto.toObject(), type: "vendor" });
+        }
+      } catch (err) {
+        console.error("Error sending auto response:", err);
+      }
+    } catch (err) {
+      console.error("chat:send error", err);
+    }
+  });
+});
 
-// Starting the server
+// Mount new routes
+app.use("/api/chat", chatRoutes);
+app.use("/api/ai", aiRoutes);
+// Add vendor list route (public) -> full path: /api/vendor/list
+app.use("/api/vendor", vendorListRoutes);
+
 const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => {
-    console.log(`Server is running at http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server running on ${PORT}`);
 });
