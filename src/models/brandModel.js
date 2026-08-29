@@ -5,20 +5,23 @@ const brandSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        unique:true,
+        unique: true,
     },
-    name: {
+    slug: {
         type: String,
-        unique:true,
+        unique: true,
     },
     description: String,
     logo: String,
-}, {timestamps: true})
-
+}, {timestamps: true});
 
 brandSchema.pre("save", async function (next) {
-    this.slug = slugify(this.name.toLowerCase());
+    if (this.isModified("name") || !this.slug) {
+        this.slug = slugify(this.name.toLowerCase());
+    }
     next();
-  });
+});
+
+brandSchema.index({ createdAt: -1 });
 
 export const Brand = mongoose.model("Brand", brandSchema);

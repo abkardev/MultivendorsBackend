@@ -1,6 +1,9 @@
 import expressAsyncHandler from "express-async-handler";
 import { Wishlist } from "../models/wishlistModel.js";
 import { AppError } from "../middlewares/errorHandler.js"
+import { sanitizeBody } from "../utils/sanitize.js";
+
+const ALLOWED_FIELDS = ['product', 'user'];
 
 // @desc Create a new Wishlist
 // @router /api/wishlist/
@@ -8,7 +11,7 @@ import { AppError } from "../middlewares/errorHandler.js"
 
 export const createWishlist = expressAsyncHandler(async (req, res) => {
     try{
-        const newWishlist = await Wishlist.create(req.body);
+        const newWishlist = await Wishlist.create({ ...sanitizeBody(req.body, ALLOWED_FIELDS), user: req.user._id });
         res.status(201).json({ status:true, data: newWishlist});
 
     }catch (error){
@@ -50,7 +53,7 @@ export const getAWishlistBySlug = expressAsyncHandler(async (req, res) => {
 
 export const updateAWishlist = expressAsyncHandler(async (req, res) => {
     try{
-        const wishlist = await Wishlist.findByIdAndUpdate(req.params.id, req.body,{
+        const wishlist = await Wishlist.findByIdAndUpdate(req.params.id, sanitizeBody(req.body, ALLOWED_FIELDS),{
             new: true 
         });
         if(!wishlist){

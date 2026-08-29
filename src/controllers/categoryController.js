@@ -1,6 +1,9 @@
 import expressAsyncHandler from "express-async-handler";
 import { Category } from "../models/categoryModel.js";
 import { AppError } from "../middlewares/errorHandler.js"
+import { sanitizeBody } from "../utils/sanitize.js";
+
+const ALLOWED_FIELDS = ['name', 'nameAr', 'slug', 'description', 'image', 'isActive', 'parent', 'icon', 'order'];
 
 // @desc Create a new Category
 // @router /api/category/
@@ -8,7 +11,7 @@ import { AppError } from "../middlewares/errorHandler.js"
 
 export const createCategory = expressAsyncHandler(async (req, res) => {
     try{
-        const newCategory = await Category.create(req.body);
+        const newCategory = await Category.create(sanitizeBody(req.body, ALLOWED_FIELDS));
         res.status(201).json({ status:true, data: newCategory});
 
     }catch (error){
@@ -50,7 +53,7 @@ export const getACategoryBySlug = expressAsyncHandler(async (req, res) => {
 
 export const updateACategory = expressAsyncHandler(async (req, res) => {
     try{
-        const category = await Category.findByIdAndUpdate(req.params.id, req.body,{
+        const category = await Category.findByIdAndUpdate(req.params.id, sanitizeBody(req.body, ALLOWED_FIELDS),{
             new: true 
         });
         if(!category){

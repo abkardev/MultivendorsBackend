@@ -1,6 +1,9 @@
 import expressAsyncHandler from "express-async-handler";
 import { SubCategory } from "../models/subCategoryModel.js";
 import { AppError } from "../middlewares/errorHandler.js"
+import { sanitizeBody } from "../utils/sanitize.js";
+
+const ALLOWED_FIELDS = ['name', 'nameAr', 'slug', 'description', 'category', 'image', 'isActive'];
 
 // @desc Create a new SubCategory
 // @router /api/subcategory/
@@ -8,7 +11,7 @@ import { AppError } from "../middlewares/errorHandler.js"
 
 export const createSubCategory = expressAsyncHandler(async (req, res) => {
     try{
-        const newSubCategory = await SubCategory.create(req.body);
+        const newSubCategory = await SubCategory.create(sanitizeBody(req.body, ALLOWED_FIELDS));
         res.status(201).json({ status:true, data: newSubCategory});
 
     }catch (error){
@@ -50,7 +53,7 @@ export const getASubCategoryBySlug = expressAsyncHandler(async (req, res) => {
 
 export const updateASubCategory = expressAsyncHandler(async (req, res) => {
     try{
-        const subcategory = await SubCategory.findByIdAndUpdate(req.params.id, req.body,{
+        const subcategory = await SubCategory.findByIdAndUpdate(req.params.id, sanitizeBody(req.body, ALLOWED_FIELDS),{
             new: true 
         });
         if(!subcategory){

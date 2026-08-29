@@ -62,4 +62,9 @@ supportSchema.pre("save", function (next) {
     next();
 });
 
+supportSchema.index({ user: 1 });
+supportSchema.index({ product: 1 });
+supportSchema.index({ status: 1, createdAt: -1 });
+supportSchema.index({ assignedTo: 1, status: 1 });
+
 export const Support = mongoose.model("Support", supportSchema)

@@ -1,30 +1,19 @@
-import express from "express";
-import { protect } from "../middlewares/authMiddleware.js"
-import { createVendor, deleteVendor, getVendorBySlug, getVendors, updateVendor } from "../controllers/vendorController.js";
+import express from 'express';
+import {
+  createVendor,
+  deleteVendor,
+  getVendorBySlug,
+  getVendors,
+  updateVendor,
+} from '../controllers/vendorController.js';
+import { authorize, protect } from '../middlewares/auth.js';
 
-const vendorRouter = express.Router();
+const router = express.Router();
 
-// Create a vendor route
+router.get('/vendors', getVendors);
+router.get('/vendor/:slug', getVendorBySlug);
+router.post('/vendor', protect, authorize('vendor', 'admin'), createVendor);
+router.put('/vendor/:id', protect, authorize('vendor', 'admin'), updateVendor);
+router.delete('/vendor/:id', protect, authorize('admin'), deleteVendor);
 
-vendorRouter.post("/", createVendor);
-
-// Get vendors route
-
-vendorRouter.get("/all", getVendors);
-
-// Get vendor By Slug route
-
-vendorRouter.get("/:slug", getVendorBySlug);
-
-// Update a vendor route
-
-vendorRouter.put("/:id", updateVendor);
-
-// Delete a vendor route
-
-vendorRouter.delete("/:id", deleteVendor);
-
-
-
-
-export default vendorRouter;
+export default router;

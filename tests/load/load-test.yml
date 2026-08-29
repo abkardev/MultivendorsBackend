@@ -1,0 +1,64 @@
+config:
+  target: "http://localhost:9000"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "baseline"
+  environments:
+    staging:
+      target: "https://api.staging.yourdomain.com"
+    prod:
+      target: "https://api.yourdomain.com"
+  variables:
+    testEmail: "{{ $processEnvironment.TEST_EMAIL }}"
+    testPassword: "{{ $processEnvironment.TEST_PASSWORD }}"
+scenarios:
+  - name: "health / ready / metrics (read-only, safe anywhere)"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/health"
+          capture:
+            - json: "$.status"
+              as: status
+      - think: 0.2
+      - get:
+          url: "/api/ready"
+      - think: 0.2
+      - get:
+          url: "/api/metrics"
+  - name: "catalog listing (products + vendors)"
+    weight: 35
+    flow:
+      - get:
+          url: "/api/products"
+          capture:
+            - json: "$.success"
+              as: ok
+      - think: 0.5
+      - get:
+          url: "/api/vendors"
+  - name: "login (keep VUs low: auth limiter is active)"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ testEmail }}"
+            password: "{{ testPassword }}"
+          capture:
+            - json: "$.token"
+              as: token
+      - think: 1
+      - get:
+          url: "/api/products"
+  - name: "order creation (STAGING ONLY - verify with demo buyer token)"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/orders"
+          json:
+            items: []
+            note: "ARTILLERY-LOAD-PROBE-{{ $randomInt(1000,9999) }}"
+          headers:
+            Authorization: "Bearer {{ __ENV.OPERATOR_TOKEN }}"

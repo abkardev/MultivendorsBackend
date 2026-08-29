@@ -1,12 +1,12 @@
 import express from "express";
-import multer from "multer";
 import { deleteFile, uploadFile } from "../controllers/uploadController.js";
+import { protect } from "../middlewares/auth.js";
+import { createUploadMiddleware, UPLOAD_CATEGORIES } from "../middlewares/uploadMiddleware.js";
 
 const uploadRouter = express.Router();
+const generalUpload = createUploadMiddleware(UPLOAD_CATEGORIES.GENERAL);
 
-const upload = multer({ dest: "uploads/"});
-
-uploadRouter.post("/upload-file", upload.single("file"), uploadFile);
-uploadRouter.delete("/delete-file/:fileName", deleteFile);
+uploadRouter.post("/upload-file", protect, generalUpload.single("file"), uploadFile);
+uploadRouter.delete("/delete-file/:fileName", protect, deleteFile);
 
 export default uploadRouter;

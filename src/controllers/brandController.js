@@ -1,6 +1,9 @@
 import expressAsyncHandler from "express-async-handler";
 import { Brand } from "../models/brandModel.js";
 import { AppError } from "../middlewares/errorHandler.js"
+import { sanitizeBody } from "../utils/sanitize.js";
+
+const ALLOWED_FIELDS = ['name', 'nameAr', 'slug', 'description', 'logo', 'isActive', 'website'];
 
 // @desc Create a new Brand
 // @router /api/brand/
@@ -8,7 +11,7 @@ import { AppError } from "../middlewares/errorHandler.js"
 
 export const createBrand = expressAsyncHandler(async (req, res) => {
     try{
-        const newBrand = await Brand.create(req.body);
+        const newBrand = await Brand.create(sanitizeBody(req.body, ALLOWED_FIELDS));
         res.status(201).json({ status:true, data: newBrand});
 
     }catch (error){
@@ -50,7 +53,7 @@ export const getABrandBySlug = expressAsyncHandler(async (req, res) => {
 
 export const updateABrand = expressAsyncHandler(async (req, res) => {
     try{
-        const brand = await Brand.findByIdAndUpdate(req.params.id, req.body,{
+        const brand = await Brand.findByIdAndUpdate(req.params.id, sanitizeBody(req.body, ALLOWED_FIELDS),{
             new: true 
         });
         if(!brand){

@@ -1,21 +1,26 @@
 import mongoose from "mongoose";
 import slugify from "slugify";
 
-
 const subcategorySchema = new mongoose.Schema({
     name: {
-        type:String,
+        type: String,
         required: true,
         unique: true
     },
     description: String,
-    slug: String,
-}, {timestamps: true}
-);
+    slug: {
+        type: String,
+        unique: true
+    },
+}, {timestamps: true});
 
 subcategorySchema.pre("save", async function (next) {
-    this.slug = slugify(this.name.toLowerCase());
+    if (this.isModified("name") || !this.slug) {
+        this.slug = slugify(this.name.toLowerCase());
+    }
     next();
-  });
+});
 
-export const SubCategory = mongoose.model("SubCategory",subcategorySchema);
+subcategorySchema.index({ createdAt: -1 });
+
+export const SubCategory = mongoose.model("SubCategory", subcategorySchema);
