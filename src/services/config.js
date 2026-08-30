@@ -11,7 +11,9 @@ const config = {
     port: parseInt(process.env.PORT) || 9000,
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
     backendUrl: process.env.BACKEND_URL || `http://localhost:${parseInt(process.env.PORT) || 9000}`,
-    trustProxy: ENV === 'production',
+    // Number of trusted reverse-proxy hops directly in front of the app.
+    // 1 = trust the nginx/platform LB hop; false = trust no proxy header (dev).
+    trustProxy: ENV === 'production' ? 1 : false,
     corsOrigins: (process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:8080').split(',').map(s => s.trim()),
   },
 

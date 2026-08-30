@@ -15,6 +15,54 @@ const productVariationSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
 });
 
+// ============================================================
+// Central wire-format normalization (Phase 3.1 / 3.2)
+// Applied on toObject AND toJSON, so nothing that reaches the
+// client ever contains mongoose internals ($__, _doc, $isNew).
+//
+// It also reshapes the response so front-end components can use
+// a stable contract WITHOUT touching the DB schema:
+//   - product.price  -> { min, max, currency } (from variations/priceBreaks)
+//   - product.images -> string[] (from image + variations[].images)
+// Original schema fields are preserved (backward compatible).
+// ============================================================
+const deriveProductResponse = (doc, ret) => {
+  const prices = [];
+  if (Array.isArray(ret.variations)) {
+    for (const v of ret.variations) {
+      if (v && typeof v.price === "number" && Number.isFinite(v.price)) prices.push(v.price);
+    }
+  }
+  if (prices.length === 0 && Array.isArray(ret.priceBreaks)) {
+    for (const b of ret.priceBreaks) {
+      if (b && typeof b.price === "number" && Number.isFinite(b.price)) prices.push(b.price);
+    }
+  }
+  const min = prices.length ? Math.min(...prices) : 0;
+  const max = prices.length ? Math.max(...prices) : 0;
+  ret.price = {
+    min,
+    max,
+    currency: (ret.acceptedCurrencies && ret.acceptedCurrencies[0]) || "SAR",
+  };
+
+  const images = [];
+  const pushImage = (u) => {
+    if (typeof u === "string" && u && !images.includes(u)) images.push(u);
+  };
+  const image = ret.image;
+  if (Array.isArray(image)) image.forEach(pushImage);
+  else if (typeof image === "string") pushImage(image);
+  if (Array.isArray(ret.variations)) {
+    for (const v of ret.variations) {
+      if (v && Array.isArray(v.images)) v.images.forEach(pushImage);
+    }
+  }
+  ret.images = images;
+
+  return ret;
+};
+
 const productSchema = new mongoose.Schema({
     name: {
       en: { type: String, required: true },
@@ -140,7 +188,11 @@ const productSchema = new mongoose.Schema({
     customProductDevelopment: { type: Boolean, default: false },
     newProductDevelopment: { type: Boolean, default: false },
     prototypeDevelopment: { type: Boolean, default: false },
-}, {timestamps: true});
+}, {
+  timestamps: true,
+  toJSON: { transform: (doc, ret) => deriveProductResponse(doc, ret) },
+  toObject: { transform: (doc, ret) => deriveProductResponse(doc, ret) },
+});
 
 productSchema.pre('validate', function (next) {
   if (this.leadTimeMin != null && this.leadTimeMax != null && this.leadTimeMax < this.leadTimeMin) {

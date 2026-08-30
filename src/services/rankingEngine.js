@@ -95,12 +95,22 @@ export async function rankProducts(products, context = {}) {
   const scored = await Promise.all(
     products.map(async (product) => {
       const ranking = await scoreProduct(product, context);
-      return { ...product, _rankingScore: ranking.score, _rankingBreakdown: ranking.breakdown };
+      // Spread a mongoose document copies $__/_doc/$isNew into the JSON.
+      // Always serialize through toObject() so the wire format stays clean
+      // and the Product toJSON/toObject transform (price/images) applies.
+      const base =
+        product && typeof product.toObject === "function"
+          ? product.toObject()
+          : product && typeof product === "object"
+            ? { ...product }
+            : {};
+      return { ...base, _rankingScore: ranking.score, _rankingBreakdown: ranking.breakdown };
     })
   );
 
   scored.sort((a, b) => (b._rankingScore || 0) - (a._rankingScore || 0));
-  return scored;
+  // Ranking fields are used only for sorting, never for the wire format.
+  return scored.map(({ _rankingScore, _rankingBreakdown, ...rest }) => rest);
 }
 
 export async function scoreVendorForRfq(vendor, rfqContext = {}) {
@@ -153,7 +163,13 @@ export async function rankVendorsForRfq(vendors, rfqContext) {
   const scored = await Promise.all(
     vendors.map(async (vendor) => {
       const result = await scoreVendorForRfq(vendor, rfqContext);
-      return { ...vendor, _rfqScore: result.score, _rfqReasons: result.reasons };
+      const base =
+        vendor && typeof vendor.toObject === "function"
+          ? vendor.toObject()
+          : vendor && typeof vendor === "object"
+            ? { ...vendor }
+            : {};
+      return { ...base, _rfqScore: result.score, _rfqReasons: result.reasons };
     })
   );
   scored.sort((a, b) => (b._rfqScore || 0) - (a._rfqScore || 0));

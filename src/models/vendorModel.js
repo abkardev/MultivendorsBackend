@@ -78,7 +78,11 @@ const vendorSchema = new mongoose.Schema(
       createdAt: { type: Date, default: Date.now },
     }],
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { transform: sanitizePublicVendor },
+    toObject: { transform: sanitizePublicVendor },
+  }
 );
 
 vendorSchema.pre('save', function createSlug(next) {
@@ -93,5 +97,23 @@ vendorSchema.index({ verificationStatus: 1, createdAt: -1 });
 vendorSchema.index({ createdAt: -1 });
 vendorSchema.index({ 'storeName.en': 'text', 'storeName.ar': 'text', 'storeDescription.en': 'text', 'storeDescription.ar': 'text' });
 vendorSchema.index({ verificationReviewedBy: 1 });
+
+const SAFE_USER_KEYS = [
+  '_id', 'name', 'firstName', 'lastName', 'email', 'phone',
+  'companyName', 'companyNameAr', 'address', 'role',
+];
+
+function sanitizePublicVendor(doc, ret) {
+  const user = ret.user;
+  if (user && typeof user === 'object' && user._id) {
+    const safe = {};
+    for (const key of SAFE_USER_KEYS) {
+      if (user[key] !== undefined) safe[key] = user[key];
+    }
+    ret.user = safe;
+  }
+  delete ret.aiHistory;
+  return ret;
+}
 
 export const Vendor = mongoose.model('Vendor', vendorSchema);

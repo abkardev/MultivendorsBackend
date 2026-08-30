@@ -480,7 +480,18 @@ export const resolveDispute = async (req, res) => {
 export const getMyOrders = async (req, res) => {
   try {
     const { role } = req.params;
-    const query = role === 'buyer' ? { buyer: req.user._id } : { vendor: req.user._id };
+    let query;
+    if (role === 'buyer') {
+      query = { buyer: req.user._id };
+    } else {
+      // EscrowOrder.vendor stores the Vendor document _id (ref: 'Vendor'),
+      // not the user _id — resolve the authenticated user's Vendor first.
+      const vendorDoc = await Vendor.findOne({ user: req.user._id }).select('_id');
+      query = vendorDoc ? { vendor: vendorDoc._id } : null;
+    }
+    if (!query) {
+      return res.json({ status: true, data: [] });
+    }
     const orders = await EscrowOrder.find(query).sort({ createdAt: -1 });
     res.json({ status: true, data: orders });
   } catch (error) {

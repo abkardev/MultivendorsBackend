@@ -35,10 +35,16 @@ export const uploadFile = expressAsyncHandler(async (req, res) => {
         metadata: { role: req.user.role, ipAddress: req.ip, userAgent: req.headers['user-agent'] },
     });
 
+    const r2PublicUrl = STORAGE_CONFIG.cloudflare.r2.publicUrl;
+    const url = file.isPublic && r2PublicUrl
+        ? `${r2PublicUrl.replace(/\/+$/, '')}/${file.storageKey}`
+        : null;
+
     res.status(201).json({
         status: true,
         message: "File uploaded successfully",
         data: {
+            id: file._id.toString(),
             _id: file._id,
             originalName: file.originalName,
             storageKey: file.storageKey,
@@ -47,6 +53,7 @@ export const uploadFile = expressAsyncHandler(async (req, res) => {
             category: file.category,
             subCategory: file.subCategory,
             isPublic: file.isPublic,
+            url,
         },
     });
 });

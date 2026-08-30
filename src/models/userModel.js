@@ -105,4 +105,49 @@ userSchema.index({ department: 1 });
 userSchema.index({ roleRef: 1 });
 userSchema.index({ isVerified: 1 });
 
+// ============================================================
+// Central wire-format sanitization (Phase 3.7 security pass).
+// Strips account-security secrets from EVERY serialized User,
+// including populated sub-documents (orders, escrow, disputes).
+// Applied on toObject AND toJSON so no representation that
+// reaches the client ever contains password hashes, recovery
+// codes, 2FA secrets or locked/force-reset flags.
+//
+// NOTE: this affects SERIALIZATION only — in-memory properties
+// (used by comparePassword, admin security tooling, 2FA flows)
+// remain fully intact.
+// ============================================================
+const SENSITIVE_WIRE_FIELDS = [
+  'password',
+  'passwordHistory',
+  'recoveryCodes',
+  'trustedDevices',
+  'failedLoginAttempts',
+  'lockoutUntil',
+  'lockedByAdmin',
+  'forcePasswordReset',
+  'resetPasswordUsed',
+  'resetPasswordToken',
+  'resetPasswordExpire',
+  'passwordChangedAt',
+  'twoFactorSecret',
+  'twoFactorTempSecret',
+  'twoFactorTempSecretExpires',
+  'twoFactorEmailCode',
+  'twoFactorEmailExpires',
+];
+
+// Works for BOTH mongoose documents (via toObject) and lean plain
+// objects, so it can be applied at every user serialization site.
+export const sanitizeUserWire = (user) => {
+  const u = user && typeof user.toObject === 'function' ? user.toObject() : user;
+  if (!u || typeof u !== 'object') return u;
+  for (const field of SENSITIVE_WIRE_FIELDS) delete u[field];
+  return u;
+};
+
+const sanitizeUserWireTransform = (doc, ret) => sanitizeUserWire(ret);
+userSchema.set('toJSON', { transform: sanitizeUserWireTransform });
+userSchema.set('toObject', { transform: sanitizeUserWireTransform });
+
 export default mongoose.model('User', userSchema);

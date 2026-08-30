@@ -85,6 +85,46 @@ import { getLogger } from '../services/logger.js';
 
 const logger = getLogger('security');
 
+/*
+ * Well-known weak JWT secret values that must never be used in production:
+ * defaults, placeholders, and development samples. This is a strength check
+ * based on recognizable weakness patterns, never a comparison against a
+ * specific secret value.
+ */
+const WEAK_JWT_TOKENS = [
+  'changeme',
+  'change_me',
+  'replaceme',
+  'replace_me',
+  'yoursecret',
+  'your_secret',
+  'your-secret',
+  'defaultsecret',
+  'default_secret',
+  'default-secret',
+  'secretkey',
+  'secret_key',
+  'secret-key',
+  'dummysecret',
+  'placeholder',
+  'ms_secure_jwt_secret',
+  'marketplace_secret',
+  'manus_secret',
+  '0123456789abcdef',
+  'testsecret',
+  'testing_secret',
+];
+
+export function isJwtSecretStrong(secret) {
+  const value = String(secret || '');
+  if (value.length < 64) return false;
+  const lower = value.toLowerCase();
+  if (WEAK_JWT_TOKENS.some((token) => lower.includes(token))) return false;
+  // Uniform/low-entropy repetitive strings (e.g. "aaaaaaaa…").
+  if (/^(.)\1{7,}$/.test(value)) return false;
+  return true;
+}
+
 export function validateProductionConfig() {
   const NODE_ENV = process.env.NODE_ENV || 'development';
 
@@ -289,6 +329,29 @@ export function validateProductionConfig() {
     if (!has(item.name)) {
       results.missing.push(item);
     }
+  }
+
+  /*
+   * ------------------------------------------------------------
+   * JWT secret strength
+   *
+   * Presence is enforced by the `critical` list above. Here we also
+   * refuse to boot when the configured secret is weak: shorter than
+   * 64 characters, an obvious default/placeholder/development value,
+   * or a repetitive low-entropy string. Strength is judged purely on
+   * the value's properties, never against a specific secret.
+   * ------------------------------------------------------------
+   */
+
+  const jwtSecret = process.env.JWT_SECRET;
+
+  if (jwtSecret && !isJwtSecretStrong(jwtSecret)) {
+    results.missing.push({
+      name: 'JWT_SECRET',
+      reason:
+        'production requires a cryptographically random secret with ' +
+        '>= 64 characters that is not a known default/development/placeholder value',
+    });
   }
 
   /*

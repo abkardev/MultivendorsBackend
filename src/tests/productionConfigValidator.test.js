@@ -11,9 +11,11 @@ function clear() {
   ]) delete process.env[k];
 }
 
+const STRONG_JWT_SECRET = 'kU7mP2xQ9rL4vT8wZ3sN6cB1gH5jD0fA7eM2qW9xR4cV8tB3nY6uJ1iK5oP0lS9dF2aG7wZ4eX1rC6hV3yN8';
+
 function setFullProduction() {
   process.env.NODE_ENV = 'production';
-  process.env.JWT_SECRET = 'x'.repeat(64);
+  process.env.JWT_SECRET = STRONG_JWT_SECRET;
   process.env.MONGODB_URI = 'mongodb://localhost:27017/marketplace';
   process.env.FRONTEND_URL = 'https://yourdomain.com';
   process.env.CF_ACCOUNT_ID = 'acct';
@@ -64,12 +66,13 @@ describe('productionConfigValidator', () => {
     expect(r.missing.map(m => m.name)).toContain('MOYASAR_API_KEY|HYPERPAY_ENTITY_ID');
   });
 
-  it('refuses PAYMENT_MODE=test in production', async () => {
+  it('allows PAYMENT_MODE=test in production with an explicit warning', async () => {
     setFullProduction();
     process.env.PAYMENT_MODE = 'test';
     const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
     const r = validateProductionConfig();
-    expect(r.missing.map(m => m.name)).toContain('PAYMENT_MODE');
+    expect(r.ok).toBe(true);
+    expect(r.warnings.some(w => w.includes('PAYMENT_MODE=test'))).toBe(true);
   });
 
   it('skips SMTP requirement when explicitly disabled', async () => {
@@ -80,7 +83,7 @@ describe('productionConfigValidator', () => {
     const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
     const r = validateProductionConfig();
     expect(r.ok).toBe(true);
-    expect(r.warnings.some(w => w.includes('SMTP_ENABLED=false'))).toBe(true);
+    expect(r.warnings.some(w => w.includes('SMTP_ENABLED is not true'))).toBe(true);
   });
 
   it('skips R2 requirements for a legacy storage provider', async () => {
@@ -101,5 +104,63 @@ describe('productionConfigValidator', () => {
     enforceProductionConfig();
     expect(exitSpy).toHaveBeenCalledWith(1);
     exitSpy.mockRestore();
+  });
+
+  it('refuses production with a missing JWT_SECRET', async () => {
+    setFullProduction();
+    delete process.env.JWT_SECRET;
+    const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
+    const r = validateProductionConfig();
+    expect(r.ok).toBe(false);
+    expect(r.missing.map(m => m.name)).toContain('JWT_SECRET');
+  });
+
+  it('refuses production with a short JWT_SECRET (< 64 chars)', async () => {
+    setFullProduction();
+    process.env.JWT_SECRET = 'short-secret-without-enough-length';
+    const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
+    const r = validateProductionConfig();
+    expect(r.missing.map(m => m.name)).toContain('JWT_SECRET');
+    expect(r.missing.find(m => m.name === 'JWT_SECRET').reason).toMatch(/64 characters/);
+  });
+
+  it('refuses production with a known weak/dev JWT_SECRET even when long', async () => {
+    setFullProduction();
+    process.env.JWT_SECRET = 'ms_secure_jwt_secret_'.repeat(4);
+    const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
+    const r = validateProductionConfig();
+    expect(r.missing.map(m => m.name)).toContain('JWT_SECRET');
+  });
+
+  it('refuses production with a placeholder JWT_SECRET', async () => {
+    setFullProduction();
+    process.env.JWT_SECRET = 'CHANGE_ME_TO_A_RANDOM_64_PLUS_CHARACTER_SECRET';
+    const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
+    const r = validateProductionConfig();
+    expect(r.missing.map(m => m.name)).toContain('JWT_SECRET');
+  });
+
+  it('refuses production with a low-entropy repetitive JWT_SECRET', async () => {
+    setFullProduction();
+    process.env.JWT_SECRET = 'a'.repeat(80);
+    const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
+    const r = validateProductionConfig();
+    expect(r.missing.map(m => m.name)).toContain('JWT_SECRET');
+  });
+
+  it('accepts a strong random 64+ JWT_SECRET in production', async () => {
+    setFullProduction();
+    const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
+    const r = validateProductionConfig();
+    expect(r.ok).toBe(true);
+    expect(r.missing.map(m => m.name)).not.toContain('JWT_SECRET');
+  });
+
+  it('stays lenient about JWT_SECRET strength outside production', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.JWT_SECRET = 'weak';
+    const { validateProductionConfig } = await import('../utils/productionConfigValidator.js');
+    const r = validateProductionConfig();
+    expect(r.ok).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import User from '../models/userModel.js';
+import User, { sanitizeUserWire } from '../models/userModel.js';
 import { Vendor } from '../models/vendorModel.js';
 import { createSession, revokeSession, revokeAllSessions, listSessions, validateSession } from '../services/sessionService.js';
 import { generateSecret, generateQRCode, verifyTOTP, encryptSecret, decryptSecret, generateRecoveryCodes, generateEmailVerificationCode } from '../services/totpService.js';
@@ -20,19 +20,12 @@ const getDeviceInfo = (req) => ({
   city: req.headers['x-city'],
 });
 
-const sanitizeUser = (user) => {
-  const u = user.toObject ? user.toObject() : user;
-  delete u.password;
-  delete u.twoFactorSecret;
-  delete u.twoFactorTempSecret;
-  delete u.resetPasswordToken;
-  delete u.passwordHistory;
-  return u;
-};
+const sanitizeUser = sanitizeUserWire;
 
 export const registerUser = async (req, res) => {
   try {
     const { name, email, password, role, companyName, companyNameEn, companyNameAr, crName, crNameEn, crNameAr, briefEn, briefAr, industry, firstName, lastName, phone, country, state, city, acceptedTerms } = req.body;
+    const deviceInfo = getDeviceInfo(req);
     if (!PASSWORD_REGEX.test(password)) return res.status(400).json({ success: false, message: 'Password must be at least 8 characters with uppercase, lowercase, number, and special character' });
     const exists = await User.findOne({ email: email.toLowerCase() });
     if (exists) return res.status(400).json({ success: false, message: 'User already exists' });

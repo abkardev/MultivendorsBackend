@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { dbConnect } from "./src/utils/utils.js";
+import config from "./src/services/config.js";
 import helmet from "helmet";
 import { requestLogger } from './src/services/logger.js';
 import cors from "cors";
@@ -164,6 +165,11 @@ try {
 
 // Initialize Express App
 const app = express();
+
+// Trust the first reverse-proxy hop (nginx / platform LB) in production so
+// req.ip, rate limiting, audit logging and webhook IP capture see the real
+// client IP instead of the proxy address. Dev keeps trust off.
+app.set('trust proxy', config.server.trustProxy);
 
 // Create HTTP Server for Socket.io
 const httpServer = createServer(app);
